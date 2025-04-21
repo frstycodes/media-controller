@@ -1,0 +1,27 @@
+[package]
+name = "media"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.44.2", features = ["full"] }
+
+axum = "0.8.3"
+socketioxide = "0.16.2"
+
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+windows = { version = "0.61.1", features = [
+    "Media",
+    "Media_Control",
+    "Storage_Streams",
+] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+tower-http = { version = "0.6.2", features = ["cors"] }
+tower = "0.5.2"
+windows-future = "0.2.0"
+image = "0.25.6"
+base64 = "0.22.1"
+anyhow = "1.0.98"
