@@ -44,6 +44,7 @@
 }
 
 :root {
+    --primary-hue: 148;
     --radius: 0.625rem;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
@@ -51,7 +52,7 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: hsl(141, 76%, 48%);
+    --primary: oklch(0.72 0.1968 var(--primary-hue));
     --primary-foreground: oklch(0, 0, 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
@@ -85,7 +86,7 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: hsl(141, 76%, 48%);
+    --primary: oklch(0.72 0.1968 var(--primary-hue));
     --primary-foreground: oklch(0, 0, 0);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);

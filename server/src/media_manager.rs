@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
-pub use base64::Engine;
-pub use base64::engine::general_purpose;
+use crate::utils;
 use serde::Serialize;
 use windows::{
     Media::{
@@ -34,6 +33,7 @@ pub struct TrackInfo {
     pub album: Option<String>,
     pub shuffle: Option<bool>,
     pub auto_repeat_mode: Option<AutoRepeatMode>,
+    pub accent_color: Option<u16>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -186,7 +186,7 @@ impl MediaManager {
         })
     }
 
-    fn thumbnail(&self, session: Option<&Session>) -> Result<String> {
+    fn thumbnail(&self, session: Option<&Session>) -> Result<Vec<u8>> {
         let session = match session {
             Some(s) => s,
             None => &self.get_current_session()?,
@@ -207,12 +207,7 @@ impl MediaManager {
         let mut bytes = vec![0u8; length];
         byte_reader.ReadBytes(&mut bytes)?;
 
-        // Encode the raw thumbnail bytes directly as base64
-        // The thumbnail is likely already in a valid image format (JPEG/PNG)
-        let encoder = general_purpose::STANDARD;
-        let thumbnail_base64 = format!("data:image/jpeg;base64,{}", encoder.encode(&bytes));
-
-        Ok(thumbnail_base64)
+        Ok(bytes)
     }
 
     pub fn track_info(&self) -> Result<TrackInfo> {
@@ -227,7 +222,27 @@ impl MediaManager {
             _ => false,
         };
 
-        let thumbnail = self.thumbnail(Some(&session)).ok();
+        // Get thumbnail and process for accent color
+        let thumbnail_result = self.thumbnail(Some(&session));
+
+        // Initialize both as None
+        let mut thumbnail = None;
+        let mut accent_color = None;
+
+        // Only process if we successfully got a thumbnail
+        if let Ok(thumbnail_bytes) = thumbnail_result {
+            // Convert bytes to base64 encoded string
+            thumbnail = Some(utils::encode_image_to_base64(&thumbnail_bytes));
+
+            // Try to extract the accent color
+            match utils::extract_accent_color_hue(&thumbnail_bytes) {
+                Ok(color) => accent_color = Some(color),
+                Err(e) => {
+                    // Log the error but continue - accent color is optional
+                    eprintln!("Failed to extract accent color: {}", e);
+                }
+            }
+        }
 
         // Get track metadata
         let title = properties.Title()?.to_string();
@@ -248,6 +263,7 @@ impl MediaManager {
             duration: duration.as_millis() as u64,
             thumbnail,
             is_playing,
+            accent_color,
         };
 
         Ok(track)

@@ -9,6 +9,7 @@ use tracing_subscriber::FmtSubscriber;
 // Import our modules
 mod media_manager;
 mod socket_io;
+mod utils;
 
 use socket_io::on_connect;
 
