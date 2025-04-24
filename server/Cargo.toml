@@ -1,5 +1,5 @@
 [package]
-name = "media"
+name = "media-broadcast"
 version = "0.1.0"
 edition = "2024"
 
@@ -25,5 +25,3 @@ windows-future = "0.2.0"
 base64 = "0.22.1"
 anyhow = "1.0.98"
 image = "0.24.9"
-kmeans_colors = "0.7.0"
-palette = "0.7.6"

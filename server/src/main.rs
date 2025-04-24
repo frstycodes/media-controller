@@ -5,12 +5,12 @@ use axum::{
     routing::{get, get_service},
 };
 use socketioxide::SocketIo;
-use std::{net::SocketAddr, path::Path};
-use tokio::net::TcpListener;
+use std::path::Path;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
 use tower_http::services::fs::ServeDir;
 use tracing_subscriber::FmtSubscriber;
+use utils::{FRONTEND_PORT, SOCKETIO_PORT};
 
 // Import our modules
 mod media_manager;
@@ -38,9 +38,17 @@ async fn serve_react_app() -> Result<()> {
         .route("/health", get(|| async { "OK" }))
         .fallback_service(react_app);
 
-    println!("Frontend hosted on 0.0.0.0:3001");
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let (listener, actual_port) = utils::try_bind(FRONTEND_PORT).await?;
+
+    if actual_port != FRONTEND_PORT {
+        println!(
+            "Frontend port {} was unavailable, using port {} instead",
+            FRONTEND_PORT, actual_port
+        );
+    }
+
+    utils::print_urls("Frontend", actual_port);
+
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -58,9 +66,17 @@ async fn serve_socket_io() -> Result<()> {
         .route("/health", get(|| async { "OK" }))
         .layer(layer);
 
-    println!("SocketIO listening on 0.0.0.0:3000");
-    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
-    let listener = TcpListener::bind(addr).await?;
+    let (listener, actual_port) = utils::try_bind(SOCKETIO_PORT).await?;
+
+    if actual_port != SOCKETIO_PORT {
+        println!(
+            "SocketIO port {} was unavailable, using port {} instead",
+            SOCKETIO_PORT, actual_port
+        );
+    }
+
+    utils::print_urls("SocketIO", actual_port);
+
     axum::serve(listener, app).await?;
     Ok(())
 }
