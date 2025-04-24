@@ -6,6 +6,9 @@ const INTERACTION_EVENTS = [
   "keydown",
   "touchstart",
   "scroll",
+  "drag-start",
+  "drag",
+  "drag-end",
 ] as const;
 
 export function useInactivityTracker(timeout: number): boolean {

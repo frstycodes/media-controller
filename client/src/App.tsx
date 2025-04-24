@@ -1,4 +1,3 @@
-import "./App.css";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "motion/react";
 import { IO, TrackInfo, events } from "./lib/socket-io";
@@ -10,22 +9,23 @@ import { FullscreenButton } from "./components/player/fullscreen-button";
 import { TrackThumbnail } from "./components/player/track-thumbnail";
 
 const INACTIVITY_TIMEOUT = 10 * 1000;
-
 const PRIMARY_HUE_KEY = "--primary-hue";
+
+function updatePrimaryColorHue(hue: number) {
+  document.documentElement.style.setProperty(PRIMARY_HUE_KEY, hue.toString());
+}
+
 function App() {
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const active = useInactivityTracker(INACTIVITY_TIMEOUT);
   const io = useRef<IO>(null!);
 
   useEffect(() => {
-    io.current = new IO("http://localhost:3000/");
-    const socket = io.current.getSocket();
+    io.current = new IO("http://192.168.0.105:3000");
+    const socket = io.current.socket;
 
     socket.on(events.TRACK_INFO, (track: TrackInfo) => {
-      document.documentElement.style.setProperty(
-        PRIMARY_HUE_KEY,
-        track.accent_color,
-      );
+      updatePrimaryColorHue(track.accent_color);
       setTrack(track);
     });
 
@@ -51,7 +51,7 @@ function App() {
     );
 
   return (
-    <div className="flex-1 flex-col sm:flex-row flex justify-center items-center">
+    <div className="flex-1 flex-col sm:flex-row flex justify-center items-center p-6">
       {active && <FullscreenButton />}
       <img
         src={track.thumbnail}
@@ -64,11 +64,12 @@ function App() {
           <div>
             <AnimatePresence mode="popLayout">
               <ProgressBar
+                key="progress-bar"
                 io={io.current}
                 active={active}
                 duration={track.duration}
               />
-              <PlayerControls active={active} io={io.current} />
+              <PlayerControls key="controls" active={active} io={io.current} />
             </AnimatePresence>
           </div>
         </div>

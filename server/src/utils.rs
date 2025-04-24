@@ -3,35 +3,25 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use image;
 
-/// Encodes raw image bytes as a base64 data URL for use in HTML/CSS
 pub fn encode_image_to_base64(bytes: &[u8]) -> String {
     let encoder = general_purpose::STANDARD;
     format!("data:image/jpeg;base64,{}", encoder.encode(bytes))
 }
 
-/// Extracts a dominant hue value (0-360) from an image to use for UI theming
-///
-/// Returns the hue value in the standard 0-360 degree range that can be used
-/// for setting accent colors in the UI that match the album art.
+/// Extracts a dominant hue value (0-360)
 ///
 /// # Arguments
-///
-/// * `image_bytes` - Raw bytes of the image (typically album art)
+/// * `image_bytes` - Raw bytes of the image
 ///
 /// # Returns
-///
-/// * `Result<u16>` - Hue value between 0-360, or an error if image processing fails
+/// * `Result<u16>` - Hue value between 0-360
 pub fn extract_accent_color_hue(image_bytes: &[u8]) -> Result<u16> {
-    // Load the image from bytes
     let img = image::load_from_memory(image_bytes)?;
-
-    // Resize to something small for faster processing
-    let small = img.resize(32, 32, image::imageops::FilterType::Nearest);
+    let small = img.resize(32, 32, image::imageops::FilterType::Gaussian);
 
     // Convert to RGB for easier color analysis
     let rgb_img = small.to_rgb8();
 
-    // Average RGB values across the image to find dominant color
     let mut r_sum: u64 = 0;
     let mut g_sum: u64 = 0;
     let mut b_sum: u64 = 0;
@@ -51,16 +41,15 @@ pub fn extract_accent_color_hue(image_bytes: &[u8]) -> Result<u16> {
 
     // If we found no valid pixels, use a default hue
     if pixel_count == 0 {
-        return Ok(141); // Default cyan-ish hue
+        return Ok(148); // Defaults to emerald green
     }
 
     // Calculate average RGB
-    let avg_r = (r_sum / pixel_count) as f32;
-    let avg_g = (g_sum / pixel_count) as f32;
-    let avg_b = (b_sum / pixel_count) as f32;
+    let r = (r_sum / pixel_count) as f32;
+    let g = (g_sum / pixel_count) as f32;
+    let b = (b_sum / pixel_count) as f32;
 
-    // Convert RGB to HSV - we only care about the Hue (H) component
-    let (h, _s, _v) = rgb_to_hsv(avg_r, avg_g, avg_b);
+    let (h, ..) = rgb_to_hsv(r, g, b);
 
     // Return the hue directly in 0-360 range
     Ok(h.round() as u16)

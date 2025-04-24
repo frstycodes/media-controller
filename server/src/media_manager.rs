@@ -353,7 +353,6 @@ impl MediaManager {
         Ok(())
     }
 
-    // The session change handler monitors for changes in the active media session
     pub fn session_changed<F>(&self, mut callback: F) -> Result<i64>
     where
         F: FnMut() -> () + Send + 'static,
@@ -373,18 +372,5 @@ impl MediaManager {
         let manager = &self.manager;
         manager.RemoveCurrentSessionChanged(token)?;
         Ok(())
-    }
-
-    // Gets a unique identifier for the current session to detect changes
-    pub fn get_session_id(&self) -> Result<String> {
-        if let Ok(session) = self.get_current_session() {
-            // Use the source app user model ID as a unique identifier
-            if let Ok(source_app_id) = session.SourceAppUserModelId() {
-                return Ok(source_app_id.to_string());
-            }
-        }
-
-        // Return a default if no session is available
-        Ok("no_session".to_string())
     }
 }

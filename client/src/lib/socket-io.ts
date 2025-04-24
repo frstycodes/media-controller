@@ -21,7 +21,7 @@ export type TrackInfo = {
   album: string | null;
   duration: number;
   thumbnail: string;
-  accent_color: string; // only hue
+  accent_color: number; // only hue 0-360
 };
 
 export type TrackControls = {
@@ -52,18 +52,10 @@ export enum AutoRepeatMode {
 }
 
 export class IO {
-  public socket: Socket;
+  socket: Socket;
 
   constructor(url?: string) {
     this.socket = io(url);
-  }
-
-  public getSocket() {
-    return this.socket;
-  }
-
-  public setSocket(socket: Socket) {
-    this.socket = socket;
   }
 
   togglePlayPause() {

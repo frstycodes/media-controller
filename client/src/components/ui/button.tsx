@@ -52,8 +52,13 @@ function Button({
       data-slot="button"
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
+      onClick={(e) => {
+        e.currentTarget.blur();
+        props.onClick?.(e);
+      }}
     />
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants };

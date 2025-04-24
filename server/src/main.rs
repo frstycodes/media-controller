@@ -34,11 +34,11 @@ async fn serve_react_app() -> Result<()> {
         .handle_error(|_| async { (StatusCode::INTERNAL_SERVER_ERROR, "Static file error") });
 
     let app = axum::Router::new()
-        .route("/health", get(|| async { "OK" }))
         .layer(CorsLayer::permissive())
+        .route("/health", get(|| async { "OK" }))
         .fallback_service(react_app);
 
-    println!("Frontend hosted on 0.0.0.0:3000");
+    println!("Frontend hosted on 0.0.0.0:3001");
     let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
@@ -54,10 +54,11 @@ async fn serve_socket_io() -> Result<()> {
         .layer(layer);
 
     let app = Router::new()
+        .layer(CorsLayer::permissive())
         .route("/health", get(|| async { "OK" }))
         .layer(layer);
 
-    println!("SocketIO listening on 0.0.0.0:3001");
+    println!("SocketIO listening on 0.0.0.0:3000");
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

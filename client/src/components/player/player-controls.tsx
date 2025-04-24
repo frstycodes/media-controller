@@ -1,4 +1,5 @@
-import { motion } from "motion/react";
+import { Button } from "@/components/ui/button";
+import { AutoRepeatMode, events, IO, TrackControls } from "@/lib/socket-io";
 import {
   Pause,
   Play,
@@ -8,19 +9,15 @@ import {
   SkipBack,
   SkipForward,
 } from "lucide-react";
-import { Button } from "../ui/button";
-import { cn } from "../../lib/utils";
-import { AutoRepeatMode, events, IO, TrackControls } from "@/lib/socket-io";
+import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 
-// Repeat mode icons for different states
 const REPEAT_MODE_ICONS = {
   [AutoRepeatMode.None]: <Repeat className="size-5" />,
   [AutoRepeatMode.List]: <Repeat className="size-5 text-primary" />,
-  [AutoRepeatMode.Track]: <Repeat1 className="size-5  text-primary" />,
+  [AutoRepeatMode.Track]: <Repeat1 className="size-5 text-primary" />,
 };
 
-// Order of repeat modes when cycling
 const REPEAT_MODE_CYCLE = [
   AutoRepeatMode.None,
   AutoRepeatMode.List,
@@ -31,31 +28,32 @@ type PlayerControlsProps = {
   io: IO;
   active: boolean;
 };
-export function PlayerControls({ io, active }: PlayerControlsProps) {
+
+export function PlayerControls(props: PlayerControlsProps) {
   const [controls, setControls] = useState<TrackControls | null>(null);
 
-  function cycleRepeatMode() {
+  const cycleRepeatMode = () => {
     if (!controls) return;
     const idx = REPEAT_MODE_CYCLE.indexOf(controls.auto_repeat_mode);
     const nextIdx = (idx + 1) % REPEAT_MODE_CYCLE.length;
     const nextMode = REPEAT_MODE_CYCLE[nextIdx];
 
-    io.setRepeatMode(nextMode);
-  }
+    props.io.setRepeatMode(nextMode);
+  };
 
   useEffect(() => {
-    const socket = io.getSocket();
+    const socket = props.io.socket;
     socket.on(events.TRACK_CONTROLS, setControls);
+
     return () => {
       socket.off(events.TRACK_CONTROLS, setControls);
     };
-  }, [io]);
+  }, [props.io]);
 
-  if (!controls) return null;
+  if (!props.active || !controls) return null;
 
-  const PlayPauseButton = controls?.playing ? Pause : Play;
+  const PlayPauseIcon = controls.playing ? Pause : Play;
 
-  if (!active) return null;
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}
@@ -66,12 +64,11 @@ export function PlayerControls({ io, active }: PlayerControlsProps) {
       {/* Shuffle button */}
       {controls.shuffle_enabled && (
         <Button
-          onClick={() => io.toggleShuffle()}
+          aria-label={controls.shuffle ? "Disable shuffle" : "Enable shuffle"}
+          data-shuffle={controls.shuffle}
           variant="ghost"
-          className={cn(
-            "rounded-full size-8! text-muted-foreground hover:bg-transparent",
-            controls.shuffle && "text-primary",
-          )}
+          onClick={() => props.io.toggleShuffle()}
+          className="rounded-full size-8! text-muted-foreground hover:bg-transparent data-[shuffle=true]:text-primary"
         >
           <Shuffle className="size-5" />
         </Button>
@@ -80,8 +77,9 @@ export function PlayerControls({ io, active }: PlayerControlsProps) {
       {/* Previous track button */}
       {controls.prev_enabled && (
         <Button
-          onClick={() => io.previousTrack()}
+          aria-label="Previous track"
           variant="ghost"
+          onClick={() => props.io.previousTrack()}
           className="rounded-full size-10 opacity-50 hover:opacity-100 sm:size-13! hover:bg-transparent"
         >
           <SkipBack className="fill-white size-7 drop-shadow-md sm:size-10" />
@@ -91,33 +89,35 @@ export function PlayerControls({ io, active }: PlayerControlsProps) {
       {/* Play/Pause button */}
       {controls.play_pause_enabled && (
         <Button
-          onClick={() => io.togglePlayPause()}
+          aria-label={controls.playing ? "Pause" : "Play"}
           variant="ghost"
+          onClick={() => props.io.togglePlayPause()}
           className="rounded-full bg-white size-12 sm:size-13 hover:bg-white!"
         >
-          <PlayPauseButton className="fill-black stroke-black stroke-1 size-5 sm:size-8" />
+          <PlayPauseIcon className="fill-black stroke-black stroke-1 size-5 sm:size-8" />
         </Button>
       )}
 
       {/* Next track button */}
       {controls.next_enabled && (
         <Button
-          onClick={() => io.nextTrack()}
+          aria-label="Next track"
           variant="ghost"
+          onClick={() => props.io.nextTrack()}
           className="rounded-full hover:bg-transparent size-10 sm:size-13! opacity-50 hover:opacity-100"
         >
           <SkipForward className="fill-white size-7 sm:size-10 drop-shadow-md" />
         </Button>
       )}
+
       {/* Repeat mode button */}
       {controls.auto_repeat_mode_enabled && (
         <Button
-          onClick={cycleRepeatMode}
+          aria-label={`Repeat mode: ${controls.auto_repeat_mode}`}
+          data-active={controls.auto_repeat_mode !== AutoRepeatMode.None}
           variant="ghost"
-          className={cn(
-            "rounded-full size-8! hover:bg-transparent text-muted-foreground",
-            controls.auto_repeat_mode !== AutoRepeatMode.None && "text-primary",
-          )}
+          onClick={cycleRepeatMode}
+          className="rounded-full size-8! hover:bg-transparent text-muted-foreground data-[active=true]:text-primary"
         >
           {REPEAT_MODE_ICONS[controls.auto_repeat_mode]}
         </Button>
