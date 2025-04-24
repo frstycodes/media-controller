@@ -29,8 +29,9 @@ const REPEAT_MODE_CYCLE = [
 
 type PlayerControlsProps = {
   io: IO;
+  active: boolean;
 };
-export function PlayerControls({ io }: PlayerControlsProps) {
+export function PlayerControls({ io, active }: PlayerControlsProps) {
   const [controls, setControls] = useState<TrackControls | null>(null);
 
   function cycleRepeatMode() {
@@ -53,6 +54,8 @@ export function PlayerControls({ io }: PlayerControlsProps) {
   if (!controls) return null;
 
   const PlayPauseButton = controls?.playing ? Pause : Play;
+
+  if (!active) return null;
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}

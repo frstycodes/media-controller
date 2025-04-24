@@ -68,12 +68,7 @@ function App() {
                 active={active}
                 duration={track.duration}
               />
-              <div
-                data-inactive={active}
-                className="contents data-[inactive=true]:none"
-              >
-                <PlayerControls io={io.current} />
-              </div>
+              <PlayerControls active={active} io={io.current} />
             </AnimatePresence>
           </div>
         </div>
