@@ -2,13 +2,51 @@ use anyhow::Result;
 use base64::Engine;
 use base64::engine::general_purpose;
 use image;
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 // Define common constants for server use
 pub const FRONTEND_PORT: u16 = 5173;
 pub const SOCKETIO_PORT: u16 = 5174;
 pub const ADDR: [u8; 4] = [0, 0, 0, 0];
+
+// Shared server configuration
+#[derive(Clone)]
+pub struct ServerConfig {
+    pub port: Arc<Mutex<u16>>,
+    pub host: Arc<Mutex<String>>,
+}
+
+impl ServerConfig {
+    pub fn new() -> Self {
+        Self {
+            port: Arc::new(Mutex::new(SOCKETIO_PORT)), // DEFAULT PORT
+            host: Arc::new(Mutex::new(String::from("localhost"))), // DEFAULT HOST
+        }
+    }
+
+    pub async fn set_info(&self, host: String, port: u16) {
+        let mut host_lock = self.host.lock().await;
+        let mut port_lock = self.port.lock().await;
+        *host_lock = host;
+        *port_lock = port;
+    }
+
+    pub async fn get_url(&self) -> String {
+        let host = self.host.lock().await.clone();
+        let port = *self.port.lock().await;
+        format!("http://{}:{}", host, port)
+    }
+}
+
+// Server info for the frontend
+#[derive(Serialize, Deserialize)]
+pub struct ServerInfo {
+    pub socketio_url: String,
+}
 
 // Image processing utilities
 pub fn encode_image_to_base64(bytes: &[u8]) -> String {
@@ -174,25 +212,35 @@ macro_rules! green_print {
 /// * `service_name` - Name of the service (e.g., "Frontend", "SocketIO")
 /// * `port` - Port number the service is running on
 pub fn print_urls(service_name: &str, port: u16) {
-    println!("\n  {service_name} server running at:\n");
+    let mut output = String::new();
+
+    output.push_str(&format!("\n  {service_name} server running at:\n\n"));
 
     // Local URL (clickable in most terminals)
-    println!("  > Local:    \x1b[32mhttp://localhost:{port}/\x1b[0m");
+    output.push_str(&format!(
+        "  > Local:    {}\n",
+        green_print!("http://localhost:{}/", port)
+    ));
 
     // Network URLs
     let network_ips = get_local_ips();
     if !network_ips.is_empty() {
         for (i, ip) in network_ips.iter().enumerate() {
             if i == 0 {
-                println!("  > Network:  \x1b[32mhttp://{ip}:{port}/\x1b[0m");
+                output.push_str(&format!(
+                    "  > Network:  {}\n",
+                    green_print!("http://{}:{}/", ip, port)
+                ));
             } else {
-                println!("              \x1b[32mhttp://{ip}:{port}/\x1b[0m");
+                output.push_str(&format!(
+                    "              {}\n",
+                    green_print!("http://{}:{}/", ip, port)
+                ));
             }
         }
     } else {
-        println!("  > Network:  \x1b[33munavailable\x1b[0m");
+        output.push_str("  > Network:  \x1b[33munavailable\x1b[0m\n");
     }
 
-    // Health check URL
-    println!("\n  > Health:   \x1b[32mhttp://localhost:{port}/health\x1b[0m\n");
+    println!("{}", output);
 }

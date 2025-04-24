@@ -7,6 +7,7 @@ import { TrackMetaData } from "./components/player/track-display";
 import { ProgressBar } from "./components/player/progress-bar";
 import { FullscreenButton } from "./components/player/fullscreen-button";
 import { TrackThumbnail } from "./components/player/track-thumbnail";
+import { useHotKey } from "./hooks/use-hotkey";
 
 const INACTIVITY_TIMEOUT = 10 * 1000;
 const PRIMARY_HUE_KEY = "--primary-hue";
@@ -15,13 +16,25 @@ function updatePrimaryColorHue(hue: number) {
   document.documentElement.style.setProperty(PRIMARY_HUE_KEY, hue.toString());
 }
 
+async function getServerUrl() {
+  const res = await fetch("/server-info");
+  const data = await res.json();
+  return data.socketio_url;
+}
+
 function App() {
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const active = useInactivityTracker(INACTIVITY_TIMEOUT);
   const io = useRef<IO>(null!);
 
-  useEffect(() => {
-    io.current = new IO("http://192.168.0.105:3000");
+  useHotKey(" ", () => {
+    if (!io.current) return;
+    io.current.togglePlayPause();
+  });
+
+  async function setupSocketIO() {
+    const url = await getServerUrl();
+    io.current = new IO(url);
     const socket = io.current.socket;
 
     socket.on(events.TRACK_INFO, (track: TrackInfo) => {
@@ -32,6 +45,13 @@ function App() {
     return () => {
       socket.off(events.TRACK_INFO);
       socket.disconnect();
+    };
+  }
+
+  useEffect(() => {
+    const cleanup = setupSocketIO();
+    return () => {
+      cleanup.then((f) => f());
     };
   }, []);
 
