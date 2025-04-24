@@ -1,9 +1,15 @@
 use anyhow::Result;
-use axum::routing::get;
+use axum::{
+    Router,
+    http::StatusCode,
+    routing::{get, get_service},
+};
 use socketioxide::SocketIo;
-use socketioxide::extract::SocketRef;
+use std::{net::SocketAddr, path::Path};
+use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::cors::CorsLayer;
+use tower_http::services::fs::ServeDir;
 use tracing_subscriber::FmtSubscriber;
 
 // Import our modules
@@ -14,25 +20,46 @@ mod utils;
 use socket_io::on_connect;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() {
+    let t0 = tokio::task::spawn(async move { serve_react_app().await });
+    let t1 = tokio::task::spawn(async move { serve_socket_io().await });
+    let _ = tokio::join!(t0, t1);
+}
+
+async fn serve_react_app() -> Result<()> {
     tracing::subscriber::set_global_default(FmtSubscriber::default())?;
 
-    let (layer, io) = SocketIo::new_layer();
+    let client_dist_path = Path::new("../client/dist");
+    let react_app = get_service(ServeDir::new(client_dist_path))
+        .handle_error(|_| async { (StatusCode::INTERNAL_SERVER_ERROR, "Static file error") });
 
-    io.ns("/ws", move |socket: SocketRef| {
-        on_connect(socket.clone(), socket.clone())
-    });
+    let app = axum::Router::new()
+        .route("/health", get(|| async { "OK" }))
+        .layer(CorsLayer::permissive())
+        .fallback_service(react_app);
+
+    println!("Frontend hosted on 0.0.0.0:3000");
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3001));
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+async fn serve_socket_io() -> Result<()> {
+    let (layer, io) = SocketIo::new_layer();
+    io.ns("/", on_connect);
 
     let layer = ServiceBuilder::new()
         .layer(CorsLayer::permissive())
         .layer(layer);
 
-    let app = axum::Router::new()
-        .route("/", get(|| async { "Media Server Running" }))
+    let app = Router::new()
+        .route("/health", get(|| async { "OK" }))
         .layer(layer);
 
-    println!("Starting media server on 0.0.0.0:3001");
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await?;
-    axum::serve(listener, app.into_make_service()).await?;
+    println!("SocketIO listening on 0.0.0.0:3001");
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+    let listener = TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
     Ok(())
 }

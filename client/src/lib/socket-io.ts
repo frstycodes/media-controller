@@ -10,7 +10,9 @@ export const events = {
   SET_REPEAT_MODE: "set_repeat_mode",
   MEDIA_CHANGED: "media_changed",
   TRACK_PROGRESS: "track_progress",
-  MEDIA_DETAILS: "media_details",
+  TRACK_INFO: "track_info",
+  TRACK_CONTROLS: "track_controls",
+  TRACK_TIMELINE: "track_timeline",
 };
 
 export type TrackInfo = {
@@ -19,10 +21,23 @@ export type TrackInfo = {
   album: string | null;
   duration: number;
   thumbnail: string;
-  is_playing: boolean;
+  accent_color: string; // only hue
+};
+
+export type TrackControls = {
+  shuffle_enabled: boolean;
+  auto_repeat_mode_enabled: boolean;
+  next_enabled: boolean;
+  prev_enabled: boolean;
+  play_pause_enabled: boolean;
+
   shuffle: boolean;
   auto_repeat_mode: AutoRepeatMode;
-  accent_color: string; // only hue
+  playing: boolean;
+};
+
+export type TrackTimeline = {
+  progress: number;
 };
 
 export type TrackProgress = {
@@ -39,7 +54,7 @@ export enum AutoRepeatMode {
 export class IO {
   public socket: Socket;
 
-  constructor(url: string) {
+  constructor(url?: string) {
     this.socket = io(url);
   }
 

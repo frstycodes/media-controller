@@ -9,27 +9,28 @@ import { ProgressBar } from "./components/player/progress-bar";
 import { FullscreenButton } from "./components/player/fullscreen-button";
 import { TrackThumbnail } from "./components/player/track-thumbnail";
 
-const SOCKET_URL = "http://192.168.0.105:3001/ws";
 const INACTIVITY_TIMEOUT = 10 * 1000;
 
+const PRIMARY_HUE_KEY = "--primary-hue";
 function App() {
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const active = useInactivityTracker(INACTIVITY_TIMEOUT);
   const io = useRef<IO>(null!);
 
   useEffect(() => {
-    io.current = new IO(SOCKET_URL);
+    io.current = new IO("http://localhost:3000/");
     const socket = io.current.getSocket();
 
-    socket.emit(events.GET_MEDIA_DETAILS);
-    socket.on(events.MEDIA_DETAILS, (track: TrackInfo) => {
-      const root = document.documentElement;
-      root.style.setProperty("--primary-hue", track.accent_color);
+    socket.on(events.TRACK_INFO, (track: TrackInfo) => {
+      document.documentElement.style.setProperty(
+        PRIMARY_HUE_KEY,
+        track.accent_color,
+      );
       setTrack(track);
     });
 
     return () => {
-      socket.off(events.MEDIA_DETAILS);
+      socket.off(events.TRACK_INFO);
       socket.disconnect();
     };
   }, []);
@@ -62,8 +63,17 @@ function App() {
           <TrackMetaData track={track} active={active} />
           <div>
             <AnimatePresence mode="popLayout">
-              <ProgressBar io={io.current} active={active} />
-              {active && <PlayerControls track={track} io={io.current} />}
+              <ProgressBar
+                io={io.current}
+                active={active}
+                duration={track.duration}
+              />
+              <div
+                data-inactive={active}
+                className="contents data-[inactive=true]:none"
+              >
+                <PlayerControls io={io.current} />
+              </div>
             </AnimatePresence>
           </div>
         </div>

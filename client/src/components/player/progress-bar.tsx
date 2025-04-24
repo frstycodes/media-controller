@@ -1,30 +1,30 @@
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Slider } from "../ui/slider";
-import { cn } from "../../lib/utils";
-import { IO, TrackProgress, events } from "../../lib/socket-io";
+import { cn } from "@/lib/utils";
+import { IO, TrackTimeline, events } from "@/lib/socket-io";
 
 type ProgressBarProps = {
   io: IO;
   active: boolean;
+  duration: number;
 };
 
-export function ProgressBar({ io, active }: ProgressBarProps) {
+export function ProgressBar({ io, active, duration }: ProgressBarProps) {
   const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
   const [seeking, setSeeking] = useState(false);
 
   useEffect(() => {
     const socket = io.getSocket();
-    const onTrackProgress = (progress: TrackProgress) => {
+    const onTrackTimeline = (timeline: TrackTimeline) => {
       if (seeking) return false;
-      setProgress(progress.position);
-      setDuration(progress.duration);
+      console.log("hello", timeline.progress);
+      setProgress(timeline.progress);
     };
-    socket.on(events.TRACK_PROGRESS, onTrackProgress);
 
+    socket.on(events.TRACK_TIMELINE, onTrackTimeline);
     return () => {
-      socket.off(events.TRACK_PROGRESS, onTrackProgress);
+      socket.off(events.TRACK_TIMELINE, onTrackTimeline);
     };
   }, [io, seeking]);
 

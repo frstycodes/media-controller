@@ -3,6 +3,7 @@ use std::str::FromStr;
 use crate::utils;
 use serde::Serialize;
 use windows::{
+    Foundation::TypedEventHandler,
     Media::{
         Control::{
             GlobalSystemMediaTransportControlsSession,
@@ -27,13 +28,27 @@ pub struct TrackProgress {
 pub struct TrackInfo {
     pub title: String,
     pub artist: String,
-    pub duration: u64,
-    pub is_playing: bool,
     pub thumbnail: Option<String>,
     pub album: Option<String>,
-    pub shuffle: Option<bool>,
-    pub auto_repeat_mode: Option<AutoRepeatMode>,
+    pub duration: u64,
     pub accent_color: Option<u16>,
+}
+#[derive(Debug, Serialize, Clone)]
+pub struct TrackControls {
+    shuffle_enabled: bool,
+    auto_repeat_mode_enabled: bool,
+    next_enabled: bool,
+    prev_enabled: bool,
+    play_pause_enabled: bool,
+
+    shuffle: bool,
+    auto_repeat_mode: AutoRepeatMode,
+    playing: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct TrackTimeline {
+    progress: u64,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -43,6 +58,7 @@ pub enum AutoRepeatMode {
     Track,
     List,
 }
+
 impl From<MediaPlaybackAutoRepeatMode> for AutoRepeatMode {
     fn from(mode: MediaPlaybackAutoRepeatMode) -> Self {
         match mode {
@@ -123,7 +139,6 @@ impl MediaManager {
 
     pub fn seek_to(&self, position_ms: u64) -> Result<bool> {
         let session = self.get_current_session()?;
-        println!("Position: {}", position_ms);
         // Convert milliseconds to 100-nanosecond units
         let position_ns = position_ms as i64 * 10000;
         let res = session.TryChangePlaybackPositionAsync(position_ns)?.get()?;
@@ -143,10 +158,7 @@ impl MediaManager {
     pub fn toggle_shuffle(&self) -> Result<()> {
         let session = self.get_current_session()?;
         let shuffle_state = self.get_shuffle_state(Some(&session))?;
-        println!("Shuffle state: {}", shuffle_state);
-        let new_state = !shuffle_state;
-        let res = session.TryChangeShuffleActiveAsync(!shuffle_state)?.get()?;
-        println!("Shuffle new state: {}, {}", new_state, res);
+        session.TryChangeShuffleActiveAsync(!shuffle_state)?;
         Ok(())
     }
 
@@ -167,23 +179,6 @@ impl MediaManager {
         let state: MediaPlaybackAutoRepeatMode = repeat_state.into();
         session.TryChangeAutoRepeatModeAsync(state)?.get()?;
         Ok(())
-    }
-
-    pub fn get_progress(&self) -> Result<TrackProgress> {
-        let session = self.get_current_session()?;
-        let timeline = session.GetTimelineProperties()?;
-
-        let position_timespan = timeline.Position()?;
-        let duration_timespan = timeline.EndTime()?;
-
-        // Get the duration value in 100-nanosecond units
-        let position_ms = position_timespan.Duration / 10000; // Convert 100ns to ms
-        let duration_ms = duration_timespan.Duration / 10000;
-
-        Ok(TrackProgress {
-            position: position_ms as u64,
-            duration: duration_ms as u64,
-        })
     }
 
     fn thumbnail(&self, session: Option<&Session>) -> Result<Vec<u8>> {
@@ -214,32 +209,17 @@ impl MediaManager {
         let session = self.get_current_session()?;
 
         let properties = session.TryGetMediaPropertiesAsync()?.get()?;
-        let playback_info = session.GetPlaybackInfo()?;
-        let playback_status = playback_info.PlaybackStatus()?;
-
-        let is_playing = match playback_status {
-            GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing => true,
-            _ => false,
-        };
-
-        // Get thumbnail and process for accent color
         let thumbnail_result = self.thumbnail(Some(&session));
 
-        // Initialize both as None
         let mut thumbnail = None;
         let mut accent_color = None;
 
-        // Only process if we successfully got a thumbnail
         if let Ok(thumbnail_bytes) = thumbnail_result {
-            // Convert bytes to base64 encoded string
             thumbnail = Some(utils::encode_image_to_base64(&thumbnail_bytes));
-
-            // Try to extract the accent color
             match utils::extract_accent_color_hue(&thumbnail_bytes) {
                 Ok(color) => accent_color = Some(color),
                 Err(e) => {
-                    // Log the error but continue - accent color is optional
-                    eprintln!("Failed to extract accent color: {}", e);
+                    tracing::error!("Failed to extract accent color: {}", e);
                 }
             }
         }
@@ -249,23 +229,162 @@ impl MediaManager {
         let album = properties.AlbumTitle().ok().map(|s| s.to_string());
         let artist = properties.Artist()?.to_string();
 
-        let shuffle = self.get_shuffle_state(Some(&session)).ok();
-        let auto_repeat_mode = self.get_auto_repeat_mode(Some(&session)).ok();
-
         let duration: std::time::Duration = session.GetTimelineProperties()?.EndTime()?.into();
 
         let track = TrackInfo {
             title,
             artist,
-            album,
-            shuffle,
-            auto_repeat_mode,
-            duration: duration.as_millis() as u64,
             thumbnail,
-            is_playing,
+            album,
             accent_color,
+            duration: duration.as_millis() as u64,
         };
 
         Ok(track)
+    }
+
+    pub fn remove_track_changed_handler(&self, token: i64) -> Result<()> {
+        let session = self.get_current_session()?;
+        session.RemoveMediaPropertiesChanged(token)?;
+        Ok(())
+    }
+
+    pub fn track_changed<F>(&self, mut callback: F) -> Result<i64>
+    where
+        F: FnMut() -> () + Send + 'static,
+    {
+        let session = self.get_current_session()?;
+        let handler = TypedEventHandler::new(move |_, _| {
+            callback();
+            windows::core::Result::Ok(())
+        });
+
+        let token = session.MediaPropertiesChanged(&handler)?;
+        Ok(token)
+    }
+
+    pub fn track_controls(&self) -> Result<TrackControls> {
+        let session = self.get_current_session()?;
+        let playback_info = session.GetPlaybackInfo()?;
+
+        let controls = playback_info.Controls()?;
+
+        let shuffle_enabled = controls.IsShuffleEnabled()?;
+        let auto_repeat_mode_enabled = controls.IsRepeatEnabled()?;
+        let next_enabled = controls.IsNextEnabled()?;
+        let prev_enabled = controls.IsPreviousEnabled()?;
+        let play_pause_enabled = controls.IsPlayPauseToggleEnabled()?;
+
+        let playing = match playback_info.PlaybackStatus()? {
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing => true,
+            _ => false,
+        };
+
+        let shuffle = match shuffle_enabled {
+            true => self.get_shuffle_state(Some(&session))?,
+            false => false,
+        };
+
+        let auto_repeat_mode = match auto_repeat_mode_enabled {
+            true => self.get_auto_repeat_mode(Some(&session))?,
+            false => AutoRepeatMode::None,
+        };
+
+        Ok(TrackControls {
+            shuffle_enabled,
+            auto_repeat_mode_enabled,
+            next_enabled,
+            prev_enabled,
+            play_pause_enabled,
+
+            shuffle,
+            auto_repeat_mode,
+            playing,
+        })
+    }
+    pub fn track_controls_changed<F>(&self, mut callback: F) -> Result<i64>
+    where
+        F: FnMut() -> () + Send + 'static,
+    {
+        let session = self.get_current_session()?;
+
+        let handler = TypedEventHandler::new(move |_, _| {
+            callback();
+            windows::core::Result::Ok(())
+        });
+
+        let token = session.PlaybackInfoChanged(&handler)?;
+        Ok(token)
+    }
+    pub fn remove_track_controls_changed_handler(&self, token: i64) -> Result<()> {
+        let session = self.get_current_session()?;
+        session.RemovePlaybackInfoChanged(token)?;
+        Ok(())
+    }
+
+    pub fn track_timeline(&self) -> Result<TrackTimeline> {
+        let session = self.get_current_session()?;
+        let timeline = session.GetTimelineProperties()?;
+        let progress = timeline.Position()?;
+
+        Ok(TrackTimeline {
+            progress: progress.Duration as u64 / 10_000, // Convert 100ns to ms
+        })
+    }
+
+    pub fn track_timeline_changed<F>(&self, mut callback: F) -> Result<i64>
+    where
+        F: FnMut() -> () + Send + 'static,
+    {
+        let session = self.get_current_session()?;
+
+        let handler = TypedEventHandler::new(move |_, _| {
+            callback();
+            windows::core::Result::Ok(())
+        });
+
+        let token = session.TimelinePropertiesChanged(&handler)?;
+        Ok(token)
+    }
+
+    pub fn remove_track_timeline_changed_handler(&self, token: i64) -> Result<()> {
+        let session = self.get_current_session()?;
+        session.RemoveTimelinePropertiesChanged(token)?;
+        Ok(())
+    }
+
+    // The session change handler monitors for changes in the active media session
+    pub fn session_changed<F>(&self, mut callback: F) -> Result<i64>
+    where
+        F: FnMut() -> () + Send + 'static,
+    {
+        let manager = &self.manager;
+
+        let handler = TypedEventHandler::new(move |_, _| {
+            callback();
+            windows::core::Result::Ok(())
+        });
+
+        let token = manager.CurrentSessionChanged(&handler)?;
+        Ok(token)
+    }
+
+    pub fn remove_session_changed_handler(&self, token: i64) -> Result<()> {
+        let manager = &self.manager;
+        manager.RemoveCurrentSessionChanged(token)?;
+        Ok(())
+    }
+
+    // Gets a unique identifier for the current session to detect changes
+    pub fn get_session_id(&self) -> Result<String> {
+        if let Ok(session) = self.get_current_session() {
+            // Use the source app user model ID as a unique identifier
+            if let Ok(source_app_id) = session.SourceAppUserModelId() {
+                return Ok(source_app_id.to_string());
+            }
+        }
+
+        // Return a default if no session is available
+        Ok("no_session".to_string())
     }
 }
