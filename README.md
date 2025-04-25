@@ -114,4 +114,4 @@ You can build your own client using the SocketIO server and the events emitted f
 
 ## Limitations
 - Currently only supports Windows OS.
-- Timeline Position doesn't update in real-time. I don't know if it's a limitation of the Windows API itself or the way I'm using it. I haven't really looked into it.
+- Timeline Position updates every 4 to 5 seconds. I don't know if it's a limitation of the Windows API itself or the way I'm using it. I haven't really looked into it.
