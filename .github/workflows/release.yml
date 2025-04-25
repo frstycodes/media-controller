@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Setup Bun for frontend build
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: "latest"
+
+      # Build frontend client
+      - name: Install frontend dependencies
+        working-directory: ./client
+        run: bun install
+
+      - name: Build frontend
+        working-directory: ./client
+        run: bun run build
+
+      # Package client dist folder into zip
+      - name: Package client dist folder
+        run: |
+          Compress-Archive -Path ./client/dist -DestinationPath ./client.zip -Force
+
+      # Setup Rust for backend build
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+
+      # Cache Rust dependencies
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+
+      # Build backend
+      - name: Build backend (release mode)
+        run: cargo build --release
+
+      # Create GitHub Release and upload assets
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            ./client.zip
+            ./target/release/media-controller.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

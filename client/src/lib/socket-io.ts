@@ -8,8 +8,7 @@ export const events = {
   SEEK: "seek",
   TOGGLE_SHUFFLE: "toggle_shuffle",
   SET_REPEAT_MODE: "set_repeat_mode",
-  MEDIA_CHANGED: "media_changed",
-  TRACK_PROGRESS: "track_progress",
+
   TRACK_INFO: "track_info",
   TRACK_CONTROLS: "track_controls",
   TRACK_TIMELINE: "track_timeline",

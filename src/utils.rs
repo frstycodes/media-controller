@@ -8,12 +8,10 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
-// Define common constants for server use
-pub const FRONTEND_PORT: u16 = 5173;
-pub const SOCKETIO_PORT: u16 = 5174;
+pub const DEFAULT_FRONTEND_PORT: u16 = 5173;
+pub const DEFAULT_SOCKETIO_PORT: u16 = 5174;
 pub const ADDR: [u8; 4] = [0, 0, 0, 0];
 
-// Shared server configuration
 #[derive(Clone)]
 pub struct ServerConfig {
     pub port: Arc<Mutex<u16>>,
@@ -21,10 +19,10 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    pub fn new() -> Self {
+    pub fn new(port: u16) -> Self {
         Self {
-            port: Arc::new(Mutex::new(SOCKETIO_PORT)), // DEFAULT PORT
-            host: Arc::new(Mutex::new(String::from("localhost"))), // DEFAULT HOST
+            port: Arc::new(Mutex::new(port)),
+            host: Arc::new(Mutex::new(String::from("localhost"))),
         }
     }
 
@@ -152,7 +150,6 @@ fn rgb_to_hsv(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
 /// # Returns
 /// * `Result<(TcpListener, u16)>` - The listener and the actual port number used
 pub async fn try_bind(preferred_port: u16) -> Result<(TcpListener, u16)> {
-    // First try the preferred port
     let preferred_addr = SocketAddr::from((ADDR, preferred_port));
     match TcpListener::bind(preferred_addr).await {
         Ok(listener) => Ok((listener, preferred_port)),
@@ -178,7 +175,7 @@ pub fn get_local_ips() -> Vec<String> {
         // This doesn't actually send any data, just gives us the interface that would be used
         if socket.connect("8.8.8.8:80").is_ok() {
             if let Ok(addr) = socket.local_addr() {
-                if let std::net::SocketAddr::V4(addr) = addr {
+                if let SocketAddr::V4(addr) = addr {
                     let ip = addr.ip();
                     if !ip.is_loopback() {
                         ips.push(ip.to_string());

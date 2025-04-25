@@ -6,12 +6,12 @@ use axum::{
     response::Json,
     routing::{get, get_service},
 };
+use clap::Parser;
 use socketioxide::SocketIo;
 use tower::ServiceBuilder;
-use tower_http::cors::CorsLayer;
-use tower_http::services::fs::ServeDir;
+use tower_http::{cors::CorsLayer, services::ServeDir};
 use tracing_subscriber::FmtSubscriber;
-use utils::{FRONTEND_PORT, SOCKETIO_PORT, ServerConfig, ServerInfo};
+use utils::{DEFAULT_FRONTEND_PORT, DEFAULT_SOCKETIO_PORT, ServerConfig, ServerInfo};
 
 // Import our modules
 mod media_manager;
@@ -20,20 +20,59 @@ mod utils;
 
 use socket_io::on_connect;
 
-const FRONTEND_PATH: &str = "../client/dist";
+/// Media Broadcast CLI
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Enable the frontend server
+    #[arg(long, short, default_value_t = false)]
+    frontend: bool,
+
+    #[arg(long, short = 'd', default_value_t = FRONTEND_DIR.to_string())]
+    /// Path to the frontend files directory
+    frontend_directory: String,
+
+    /// Port for the frontend server
+    #[arg(long, default_value_t = DEFAULT_FRONTEND_PORT)]
+    frontend_port: u16,
+
+    /// Port for the Socket.IO server
+    #[arg(long, default_value_t = DEFAULT_SOCKETIO_PORT)]
+    socketio_port: u16,
+}
+
+const FRONTEND_DIR: &str = "client/dist";
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(FmtSubscriber::default()).ok();
-    let server_config = ServerConfig::new();
+    let args = Args::parse();
 
-    let config_for_react = server_config.clone();
-    let config_for_service = server_config.clone();
+    let config = ServerConfig::new(args.socketio_port);
 
-    let t0 = tokio::spawn(async move { serve_react_app(config_for_react).await });
-    let t1 = tokio::spawn(async move { serve_socket_io(config_for_service).await });
+    let config_for_socketio = config.clone();
+    let server_task = tokio::spawn(async move {
+        let port = args.frontend_port;
+        if let Err(e) = serve_socket_io(config_for_socketio, port).await {
+            tracing::error!("Socket.IO server error: {}", e);
+        }
+    });
 
-    let _ = tokio::join!(t0, t1);
+    if args.frontend {
+        let port = args.frontend_port;
+        let dir = args.frontend_directory;
+
+        let task = tokio::spawn(async move {
+            if let Err(e) = serve_react_app(config, port, dir).await {
+                eprintln!("Frontend service error: {}", e);
+            }
+        });
+        task.await.ok();
+    }
+
+    server_task.await.ok();
+
+    Ok(())
 }
 
 // Handler for server-info endpoint
@@ -42,23 +81,24 @@ async fn server_info_handler(State(config): State<ServerConfig>) -> Json<ServerI
     Json(ServerInfo { socketio_url })
 }
 
-async fn serve_react_app(config: ServerConfig) -> Result<()> {
-    let react_app = get_service(ServeDir::new(FRONTEND_PATH))
+async fn serve_react_app(config: ServerConfig, port: u16, frontend_dir: String) -> Result<()> {
+    tracing::debug!("Serving frontend from directory: {}", frontend_dir);
+
+    let react_app = get_service(ServeDir::new(frontend_dir))
         .handle_error(|_| async { (StatusCode::INTERNAL_SERVER_ERROR, "Static file error") });
 
     let app = axum::Router::new()
         .route("/server-info", get(server_info_handler))
         .route("/health", get(|| async { "OK" }))
-        .layer(CorsLayer::permissive())
-        .with_state(config)
-        .fallback_service(react_app);
+        .fallback_service(react_app)
+        .with_state(config.clone());
 
-    let (listener, actual_port) = utils::try_bind(FRONTEND_PORT).await?;
+    let (listener, actual_port) = utils::try_bind(port).await?;
 
-    if actual_port != FRONTEND_PORT {
+    if actual_port != port {
         println!(
             "Frontend port {} was unavailable, using port {} instead",
-            FRONTEND_PORT, actual_port
+            port, actual_port
         );
     }
 
@@ -68,7 +108,7 @@ async fn serve_react_app(config: ServerConfig) -> Result<()> {
     Ok(())
 }
 
-async fn serve_socket_io(config: ServerConfig) -> Result<()> {
+async fn serve_socket_io(config: ServerConfig, port: u16) -> Result<()> {
     let (layer, io) = SocketIo::new_layer();
     io.ns("/", on_connect);
 
@@ -81,7 +121,7 @@ async fn serve_socket_io(config: ServerConfig) -> Result<()> {
         .route("/health", get(|| async { "OK" }))
         .layer(layer);
 
-    let (listener, actual_port) = utils::try_bind(SOCKETIO_PORT).await?;
+    let (listener, actual_port) = utils::try_bind(port).await?;
 
     // Update the shared configuration with the actual Socket.IO port
     // Use the first network IP if available, otherwise use localhost
@@ -92,10 +132,10 @@ async fn serve_socket_io(config: ServerConfig) -> Result<()> {
 
     config.set_info(host.clone(), actual_port).await;
 
-    if actual_port != SOCKETIO_PORT {
+    if actual_port != port {
         println!(
             "SocketIO port {} was unavailable, using port {} instead",
-            SOCKETIO_PORT, actual_port
+            port, actual_port
         );
     }
 
