@@ -93,22 +93,22 @@ Functions are events emitted from SocketIO Client to control/request data from t
 2. Place media-controller.exe in a folder and unzip client.zip in the same folder.
 3. Open a terminal in the folder and run:
     ```bash
-    media-controller.exe -f
+    ./media-controller.exe -f
     ```
-4. This will start the service and print the urls for the web client and socket io server.
+    This will start the service and print the urls for the web client and socket io server.
 
 
 
 For details on arguments, run the command with '-h' or '--help' flag:
 ```bash
-media-controller.exe -h
+./media-controller.exe -h
 ```
 
 
 ## Bring in your own Client
 You can build your own client using the SocketIO server and the events emitted from it. The client can be built using any framework or library which supports SocketIO. And you can use the flag `-d` or `--frontend-directory` to specify the directory of your client.
 ```bash
-media-controller.exe -f -d <path-to-your-client>
+./media-controller.exe -f -d <path-to-your-client>
 ```
 
 
